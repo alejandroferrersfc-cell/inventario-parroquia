@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { db } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   Pencil,
   Trash2,
@@ -80,38 +82,65 @@ export default function InventarioIglesiaApp() {
   const [zonas, setZonas] = useState([]);
   const [tipoMensaje, setTipoMensaje] = useState('success');
   const timeoutMensajeRef = useRef(null);
+  console.log("APP CARGADA");
 
-  useEffect(() => {
-    const guardado = localStorage.getItem(STORAGE_KEY);
-    const zonasGuardadas = localStorage.getItem('zonas-iglesia');
 
-    if (guardado) {
-      try {
-        const parseado = JSON.parse(guardado);
-        if (Array.isArray(parseado)) {
-          setInventario(parseado);
-          return;
-        }
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
+useEffect(() => {
+  const cargarDatos = async () => {
+    try {
+      const referencia = doc(db, "inventario", "InventarioParroquia");
+      const snap = await getDoc(referencia);
+
+      if (snap.exists()) {
+        const data = snap.data();
+
+        setInventario(Array.isArray(data.items) ? data.items : datosIniciales);
+        setZonas(Array.isArray(data.zonas) ? data.zonas : []);
+      } else {
+        setInventario(datosIniciales);
+        setZonas([]);
+
+        await setDoc(referencia, {
+          items: datosIniciales,
+          zonas: [],
+        });
       }
+    } catch (error) {
+  console.error("Error al cargar Firebase:", error);
+  alert("Error al cargar Firebase: " + error.message);
+  setInventario(datosIniciales);
+  setZonas([]);
+}
+  };
+
+  cargarDatos();
+}, []);
+  console.log("ANTES DEL useEffect DE GUARDADO");
+console.log("ANTES DEL useEffect DE GUARDADO");
+
+useEffect(() => {
+  console.log("ENTRANDO AL useEffect DE GUARDADO");
+
+  if (inventario.length === 0 && zonas.length === 0) return;
+
+  const guardarDatos = async () => {
+    console.log("Guardando en Firebase", inventario);
+
+    try {
+      const referencia = doc(db, "inventario", "InventarioParroquia");
+
+      await setDoc(referencia, {
+        items: inventario,
+        zonas: zonas,
+      });
+    } catch (error) {
+      console.error("Error al guardar en Firebase:", error);
+      alert("Error al guardar en Firebase: " + error.message);
     }
+  };
 
-    setInventario(datosIniciales);
-
-    if (zonasGuardadas) {
-      try {
-        const z = JSON.parse(zonasGuardadas);
-        if (Array.isArray(z)) setZonas(z);
-      } catch {}
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(inventario));
-    localStorage.setItem('zonas-iglesia', JSON.stringify(zonas));
-  }, [inventario, zonas]);
-
+  guardarDatos();
+}, [inventario, zonas]);
   useEffect(() => {
     return () => {
       if (timeoutMensajeRef.current) {
@@ -141,7 +170,7 @@ export default function InventarioIglesiaApp() {
     });
 
     return ['Todas', ...Array.from(mapa.values()).sort((a, b) => a.localeCompare(b))];
-  }, [inventario]);
+  }, [inventario,zonas]);
 
   const inventarioFiltrado = useMemo(() => {
     return inventario.filter((item) => {
