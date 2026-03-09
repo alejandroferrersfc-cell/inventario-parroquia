@@ -339,26 +339,29 @@ Si la eliminas también se eliminarán esos objetos.
 };
 
   const obtenerClaseUbicacion = (ubicacion = '') => {
-    const valor = normalizeUbicacion(ubicacion);
 
-    if (valor.includes('iglesia') || valor.includes('altar')) {
-      return 'bg-blue-50 text-blue-700';
-    }
-    if (valor.includes('patio') || valor.includes('jard')) {
-      return 'bg-emerald-50 text-emerald-700';
-    }
-    if (valor.includes('limpieza')) {
-      return 'bg-amber-50 text-amber-700';
-    }
-    if (valor.includes('almac') || valor.includes('trastero')) {
-      return 'bg-violet-50 text-violet-700';
-    }
-    if (valor.includes('sal') || valor.includes('parroquial')) {
-      return 'bg-rose-50 text-rose-700';
-    }
+  const colores = [
+    'bg-blue-50 text-blue-700',
+    'bg-emerald-50 text-emerald-700',
+    'bg-amber-50 text-amber-700',
+    'bg-rose-50 text-rose-700',
+    'bg-violet-50 text-violet-700',
+    'bg-indigo-50 text-indigo-700',
+    'bg-cyan-50 text-cyan-700'
+  ];
 
-    return 'bg-slate-100 text-slate-700';
-  };
+  const valor = normalizeUbicacion(ubicacion);
+
+  let hash = 0;
+
+  for (let i = 0; i < valor.length; i++) {
+    hash = valor.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const indice = Math.abs(hash) % colores.length;
+
+  return colores[indice];
+};
 
   const mostrarMensajeTemporal = (mensaje, tipo = 'success') => {
     setMensajeAccion(mensaje);
