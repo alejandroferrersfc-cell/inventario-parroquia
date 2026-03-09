@@ -19,12 +19,12 @@ import {
 const STORAGE_KEY = 'inventario-iglesia';
 
 const datosIniciales = [
-  { id: 1, objeto: 'Banco', cantidad: 12, ubicacion: 'Iglesia', medida: '2 m de largo' },
-  { id: 2, objeto: 'Maceta', cantidad: 8, ubicacion: 'Patio', medida: '40 cm de alto' },
-  { id: 3, objeto: 'Escoba', cantidad: 3, ubicacion: 'Limpieza', medida: '1,2 m' },
-  { id: 4, objeto: 'Mesa', cantidad: 2, ubicacion: 'Sala parroquial', medida: '1,5 m x 80 cm' },
-  { id: 5, objeto: 'Silla', cantidad: 20, ubicacion: 'Salón', medida: '45 cm de alto' },
-  { id: 6, objeto: 'Atril', cantidad: 1, ubicacion: 'Altar', medida: '1,3 m de alto' },
+  { id: 1, objeto: 'Banco', cantidad: 12, ubicacion: 'Iglesia', medida: '2 m de largo', foto: '', descripcion: '' },
+  { id: 2, objeto: 'Maceta', cantidad: 8, ubicacion: 'Patio', medida: '40 cm de alto', foto: '', descripcion: '' },
+  { id: 3, objeto: 'Escoba', cantidad: 3, ubicacion: 'Limpieza', medida: '1,2 m', foto: '', descripcion: '' },
+  { id: 4, objeto: 'Mesa', cantidad: 2, ubicacion: 'Sala parroquial', medida: '1,5 m x 80 cm', foto: '', descripcion: '' },
+  { id: 5, objeto: 'Silla', cantidad: 20, ubicacion: 'Salón', medida: '45 cm de alto', foto: '', descripcion: '' },
+  { id: 6, objeto: 'Atril', cantidad: 1, ubicacion: 'Altar', medida: '1,3 m de alto', foto: '', descripcion: '' },
 ];
 
 const normalizeUbicacion = (valor = '') => valor.trim().toLowerCase();
@@ -49,6 +49,8 @@ const crearFilaVacia = (id, ubicacionPorDefecto = '') => ({
   cantidad: 1,
   ubicacion: ubicacionPorDefecto,
   medida: '',
+  foto: '',
+  descripcion: '',
 });
 
 function esFilaVacia(item) {
@@ -80,6 +82,7 @@ export default function InventarioIglesiaApp() {
   const [objetoAEliminar, setObjetoAEliminar] = useState(null);
   const [mensajeAccion, setMensajeAccion] = useState('');
   const [zonas, setZonas] = useState([]);
+  const [zonaAEliminar, setZonaAEliminar] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState('success');
   const timeoutMensajeRef = useRef(null);
   console.log("APP CARGADA");
@@ -278,6 +281,7 @@ useEffect(() => {
   };
 
   const anadirUbicacion = () => {
+   
     const texto = nuevaUbicacion.trim();
     if (!texto) return;
 
@@ -298,6 +302,41 @@ useEffect(() => {
 
     mostrarMensajeTemporal(`Ubicación ${ubicacionBonita} preparada para usar.`, 'success');
   };
+
+  const eliminarZona = (zona) => {
+
+  const zonaNormalizada = normalizeUbicacion(zona);
+
+  const objetosEnZona = inventario.filter(
+    (item) => normalizeUbicacion(item.ubicacion) === zonaNormalizada
+  );
+
+  let mensaje = "";
+
+  if (objetosEnZona.length > 0) {
+    mensaje = `La zona "${zona}" tiene ${objetosEnZona.length} objetos asignados.
+
+Si la eliminas también se eliminarán esos objetos.
+
+¿Estás seguro?`;
+  } else {
+    mensaje = `¿Seguro que quieres eliminar la zona "${zona}"?`;
+  }
+
+  const confirmar = window.confirm(mensaje);
+
+  if (!confirmar) return;
+
+  setZonas((prev) =>
+    prev.filter((z) => normalizeUbicacion(z) !== zonaNormalizada)
+  );
+
+  setInventario((prev) =>
+    prev.filter((item) => normalizeUbicacion(item.ubicacion) !== zonaNormalizada)
+  );
+
+  mostrarMensajeTemporal(`Zona "${zona}" eliminada correctamente.`, "success");
+};
 
   const obtenerClaseUbicacion = (ubicacion = '') => {
     const valor = normalizeUbicacion(ubicacion);
@@ -429,6 +468,7 @@ useEffect(() => {
       mostrarMensajeTemporal('No se pudo preparar el PDF.', 'error');
     }
   };
+
 
   return (
     <>
@@ -567,6 +607,40 @@ useEffect(() => {
                       <FolderPlus className="h-4 w-4" />
                       Añadir zona
                     </button>
+                    <div className="flex gap-2">
+  <select
+    value={zonaAEliminar}
+    onChange={(e) => setZonaAEliminar(e.target.value)}
+    className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+  >
+    <option value="">Seleccionar zona</option>
+
+    {ubicaciones
+      .filter((zona) => zona !== "Todas")
+      .map((zona) => (
+        <option key={zona} value={zona}>
+          {zona}
+        </option>
+      ))}
+  </select>
+
+  <button
+    onClick={() => {
+      if (!zonaAEliminar) {
+        mostrarMensajeTemporal("Selecciona una zona primero.", "warning");
+        return;
+      }
+
+      eliminarZona(zonaAEliminar);
+      setZonaAEliminar("");
+    }}
+    className="flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-500"
+  >
+    <Trash2 className="h-4 w-4" />
+    Eliminar zona
+  </button>
+</div>
+                   
                   </div>
 
                   <button
@@ -604,6 +678,8 @@ useEffect(() => {
                     <th className="p-4 text-sm font-semibold">Cantidad</th>
                     <th className="p-4 text-sm font-semibold">Ubicación / Clasificación</th>
                     <th className="p-4 text-sm font-semibold">Medida</th>
+                    <th className="p-4 text-sm font-semibold">Foto</th>
+                    <th className="p-4 text-sm font-semibold">Descripción</th>
                     <th className="rounded-tr-2xl p-4 text-sm font-semibold print:hidden">Acciones</th>
                   </tr>
                 </thead>
@@ -681,6 +757,80 @@ useEffect(() => {
                             <span className="text-slate-700">{item.medida || '—'}</span>
                           )}
                         </td>
+
+    <td className="border-b border-slate-200 p-3 align-middle">
+
+  {enEdicion ? (
+
+    <div className="flex items-center gap-3">
+
+      {formulario.foto && (
+        <img
+          src={formulario.foto}
+          alt="preview"
+          className="h-12 w-12 rounded-lg object-cover border"
+        />
+      )}
+
+      <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
+
+        📷 {formulario.foto ? "Cambiar foto" : "Subir foto"}
+
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+         onChange={(e) => {
+
+  const archivo = e.target.files[0];
+  if (!archivo) return;
+
+  const reader = new FileReader();
+
+  reader.onloadend = () => {
+    const base64 = reader.result;
+    actualizarCampo("foto", base64);
+  };
+
+  reader.readAsDataURL(archivo);
+}}
+        />
+
+      </label>
+
+    </div>
+
+  ) : (
+    item.foto ? (
+  <img
+    src={item.foto}
+    alt={item.objeto}
+    className="h-14 w-14 rounded-lg object-cover shadow-sm cursor-pointer"
+   onClick={() => {
+  const nuevaVentana = window.open();
+  nuevaVentana.document.write(`<img src="${item.foto}" style="max-width:100%">`);
+}}
+  />
+) : (
+  <span className="text-slate-400">Sin foto</span>
+)
+  )}
+
+</td>
+
+<td className="border-b border-slate-200 p-3 align-middle">
+  {enEdicion ? (
+    <input
+      type="text"
+      value={formulario.descripcion}
+      onChange={(e) => actualizarCampo("descripcion", e.target.value)}
+      placeholder="Descripción del objeto"
+      className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none"
+    />
+  ) : (
+    <span className="text-slate-700">{item.descripcion}</span>
+  )}
+</td>
 
                         <td className="border-b border-slate-200 p-3 align-middle print:hidden">
                           <div className="flex flex-wrap gap-2">

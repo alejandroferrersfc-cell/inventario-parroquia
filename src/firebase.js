@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
+
 const firebaseConfig = {
   apiKey: "AIzaSyAtsVtiDuzWjVWQIzlx3YqKrmcwRddd8b0",
   authDomain: "inventario-parroquia-230ff.firebaseapp.com",
