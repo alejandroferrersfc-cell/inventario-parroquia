@@ -121,6 +121,9 @@ const cerrarSesion = async () => {
 
 
 useEffect(() => {
+
+  if (!usuario) return; // ⬅️ ESTA ES LA LÍNEA IMPORTANTE
+
   const cargarDatos = async () => {
     try {
       const referencia = doc(db, "inventario", "InventarioParroquia");
@@ -141,15 +144,13 @@ useEffect(() => {
         });
       }
     } catch (error) {
-  console.error("Error al cargar Firebase:", error);
-  alert("Error al cargar Firebase: " + error.message);
-  setInventario(datosIniciales);
-  setZonas([]);
-}
+      console.error("Error al cargar Firebase:", error);
+    }
   };
 
   cargarDatos();
-}, []);
+
+}, [usuario]);
   console.log("ANTES DEL useEffect DE GUARDADO");
 console.log("ANTES DEL useEffect DE GUARDADO");
 
