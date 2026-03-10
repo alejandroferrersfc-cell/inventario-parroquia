@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { auth } from "./firebase";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import Spinner from "./components/Spinner";
 import {
   Pencil,
   Trash2,
@@ -91,6 +92,7 @@ export default function InventarioIglesiaApp() {
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [mostrarPassword, setMostrarPassword] = useState(false);
+const [cargando, setCargando] = useState(true);
   console.log("APP CARGADA");
 
 
@@ -130,12 +132,13 @@ useEffect(() => {
       const referencia = doc(db, "inventario", "InventarioParroquia");
       const snap = await getDoc(referencia);
 
-      if (snap.exists()) {
-        const data = snap.data();
+     if (snap.exists()) {
+  const data = snap.data();
 
-        setInventario(Array.isArray(data.items) ? data.items : datosIniciales);
-        setZonas(Array.isArray(data.zonas) ? data.zonas : []);
-      } else {
+  setInventario(Array.isArray(data.items) ? data.items : datosIniciales);
+  setZonas(Array.isArray(data.zonas) ? data.zonas : []);
+  setCargando(false);
+} else {
         setInventario(datosIniciales);
         setZonas([]);
 
@@ -444,16 +447,18 @@ Si la eliminas también se eliminarán esos objetos.
   const imprimirPDF = () => {
     try {
       const filasHtml = inventarioFiltrado
-        .map(
-          (item) => `
-            <tr>
-              <td>${escaparHtml(item.objeto || '')}</td>
-              <td>${escaparHtml(item.cantidad ?? '')}</td>
-              <td>${escaparHtml(item.ubicacion || '')}</td>
-              <td>${escaparHtml(item.medida || '')}</td>
-            </tr>
-          `
-        )
+  .map(
+    (item) => `
+      <tr>
+        <td>${escaparHtml(item.objeto || '')}</td>
+        <td>${escaparHtml(item.cantidad ?? '')}</td>
+        <td>${escaparHtml(item.ubicacion || '')}</td>
+        <td>${escaparHtml(item.medida || '')}</td>
+        <td>${item.foto ? `<img src="${item.foto}" style="height:30px; width:30px; object-fit:cover;">` : '—'}</td>
+        <td>${escaparHtml(item.descripcion || '')}</td>
+      </tr>
+    `
+  )
         .join('');
 
       const ventana = window.open('', '_blank', 'width=1000,height=700');
@@ -469,7 +474,7 @@ Si la eliminas también se eliminarán esos objetos.
         <html lang="es">
           <head>
             <meta charset="UTF-8" />
-            <title>Inventario de la Iglesia</title>
+            <title>Inventario de la Parroquia San José y Santa Maria</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
               h1 { margin-bottom: 8px; }
@@ -481,15 +486,18 @@ Si la eliminas también se eliminarán esos objetos.
             </style>
           </head>
           <body>
-            <h1>Inventario de la Iglesia</h1>
+            <h1>Inventario de la Parroquia San José y Santa Maria</h1>
+            <p>Fecha del inventario: ${new Date().toLocaleDateString()}</p>
             <p>Listado actual del inventario.</p>
             <table>
               <thead>
                 <tr>
                   <th>Objeto</th>
-                  <th>Cantidad</th>
-                  <th>Ubicación</th>
-                  <th>Medida</th>
+                    <th>Cantidad</th>
+                    <th>Ubicación</th>
+                    <th>Medida</th>
+                    <th>Foto</th>
+                    <th>Descripción</th>
                 </tr>
               </thead>
               <tbody>
@@ -557,6 +565,11 @@ if (!usuario) {
       </div>
     
   );
+}
+
+
+if (cargando) {
+  return <Spinner />;
 }
   return (
     <>
