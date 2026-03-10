@@ -94,12 +94,15 @@ const [password, setPassword] = useState("");
 const [mostrarPassword, setMostrarPassword] = useState(false);
 const [cargando, setCargando] = useState(true);
 const [visible, setVisible] = useState(false);
+const [authCargando, setAuthCargando] = useState(true);
+const [loginCargando, setLoginCargando] = useState(false);
   console.log("APP CARGADA");
 
 
  useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, (user) => {
     setUsuario(user);
+    setAuthCargando(false);
   });
 
   return () => unsubscribe();
@@ -108,9 +111,19 @@ const [visible, setVisible] = useState(false);
   
   const iniciarSesion = async () => {
   try {
+
+    setLoginCargando(true);
+
     await signInWithEmailAndPassword(auth, email, password);
+
   } catch (error) {
+
     alert("Error al iniciar sesión: " + error.message);
+
+  } finally {
+
+    setLoginCargando(false);
+
   }
 };
 
@@ -559,11 +572,12 @@ if (!usuario) {
   </button>
 </div>
 
-       <button
+     <button
   type="submit"
-  className="w-full rounded-lg bg-red-700 py-2 text-white hover:bg-red-600"
+  disabled={loginCargando}
+  className="w-full rounded-xl bg-red-700 px-4 py-3 text-white font-semibold hover:bg-red-600 disabled:opacity-60"
 >
-  Iniciar sesión
+  {loginCargando ? "Iniciando sesión..." : "Iniciar sesión"}
 </button>
         </form>
       </div>
@@ -572,7 +586,9 @@ if (!usuario) {
 }
 
 
-if (cargando) {
+
+
+if (authCargando || cargando || loginCargando) {
   return <Spinner />;
 }
   return (
