@@ -90,6 +90,7 @@ export default function InventarioIglesiaApp() {
   const [usuario, setUsuario] = useState(null);
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
+const [mostrarPassword, setMostrarPassword] = useState(false);
   console.log("APP CARGADA");
 
 
@@ -511,7 +512,13 @@ Si la eliminas también se eliminarán esos objetos.
 if (!usuario) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl">
+       <form
+  onSubmit={(e) => {
+    e.preventDefault();
+    iniciarSesion();
+  }}
+  className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl"
+>
         <h2 className="mb-6 text-center text-2xl font-bold">Acceso al inventario</h2>
 
         <input
@@ -522,22 +529,33 @@ if (!usuario) {
           className="mb-3 w-full rounded-lg border px-3 py-2"
         />
 
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mb-4 w-full rounded-lg border px-3 py-2"
-        />
+       <div className="relative">
+  <input
+    type={mostrarPassword ? "text" : "password"}
+    placeholder="Contraseña"
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    className="mb-4 w-full rounded-lg border px-3 py-2 pr-10"
+  />
 
-        <button
-          onClick={iniciarSesion}
-          className="w-full rounded-lg bg-red-700 py-2 text-white hover:bg-red-600"
-        >
-          Iniciar sesión
-        </button>
+  <button
+    type="button"
+    onClick={() => setMostrarPassword(!mostrarPassword)}
+    className="absolute right-2 top-2 text-slate-500"
+  >
+    {mostrarPassword ? "🙈" : "👁"}
+  </button>
+</div>
+
+       <button
+  type="submit"
+  className="w-full rounded-lg bg-red-700 py-2 text-white hover:bg-red-600"
+>
+  Iniciar sesión
+</button>
+        </form>
       </div>
-    </div>
+    
   );
 }
   return (
