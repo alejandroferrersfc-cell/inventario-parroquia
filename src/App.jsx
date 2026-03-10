@@ -93,6 +93,7 @@ const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [mostrarPassword, setMostrarPassword] = useState(false);
 const [cargando, setCargando] = useState(true);
+const [visible, setVisible] = useState(false);
   console.log("APP CARGADA");
 
 
@@ -138,6 +139,9 @@ useEffect(() => {
   setInventario(Array.isArray(data.items) ? data.items : datosIniciales);
   setZonas(Array.isArray(data.zonas) ? data.zonas : []);
   setCargando(false);
+  setTimeout(() => {
+  setVisible(true);
+}, 50);
 } else {
         setInventario(datosIniciales);
         setZonas([]);
@@ -573,6 +577,11 @@ if (cargando) {
 }
   return (
     <>
+    <div
+  className={`transition-opacity duration-700 ${
+    visible ? "opacity-100" : "opacity-0"
+  }`}
+> 
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#fff7f7,_#f5e6e0_55%,_#e7d3c9)] p-4 md:p-8 print:bg-white print:p-0">
         <div className="mx-auto max-w-7xl print:max-w-full">
           <div className="relative mb-6 overflow-hidden rounded-[32px] bg-gradient-to-r from-red-800 via-red-700 to-amber-900 text-white shadow-2xl print:shadow-none">
@@ -1023,7 +1032,9 @@ if (cargando) {
             </div>
           </div>
         </div>
+        
       )}
+      </div>
     </>
   );
 }
