@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { db } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "./firebase";
+import { auth } from "./firebase";
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import {
   Pencil,
   Trash2,
@@ -85,7 +87,37 @@ export default function InventarioIglesiaApp() {
   const [zonaAEliminar, setZonaAEliminar] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState('success');
   const timeoutMensajeRef = useRef(null);
+  const [usuario, setUsuario] = useState(null);
+const [email, setEmail] = useState("");
+const [password, setPassword] = useState("");
   console.log("APP CARGADA");
+
+
+ useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    setUsuario(user);
+  });
+
+  return () => unsubscribe();
+}, []);
+
+  
+  const iniciarSesion = async () => {
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    alert("Error al iniciar sesión: " + error.message);
+  }
+};
+
+const cerrarSesion = async () => {
+  await signOut(auth);
+};
+
+
+
+ 
+
 
 
 useEffect(() => {
@@ -151,6 +183,9 @@ useEffect(() => {
       }
     };
   }, []);
+
+
+  
 
   const ubicaciones = useMemo(() => {
     const mapa = new Map();
@@ -472,7 +507,38 @@ Si la eliminas también se eliminarán esos objetos.
     }
   };
 
+if (!usuario) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-100">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl">
+        <h2 className="mb-6 text-center text-2xl font-bold">Acceso al inventario</h2>
 
+        <input
+          type="email"
+          placeholder="Correo electrónico"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mb-3 w-full rounded-lg border px-3 py-2"
+        />
+
+        <input
+          type="password"
+          placeholder="Contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="mb-4 w-full rounded-lg border px-3 py-2"
+        />
+
+        <button
+          onClick={iniciarSesion}
+          className="w-full rounded-lg bg-red-700 py-2 text-white hover:bg-red-600"
+        >
+          Iniciar sesión
+        </button>
+      </div>
+    </div>
+  );
+}
   return (
     <>
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#fff7f7,_#f5e6e0_55%,_#e7d3c9)] p-4 md:p-8 print:bg-white print:p-0">
@@ -486,6 +552,14 @@ Si la eliminas también se eliminarán esos objetos.
                   Gestión del inventario parroquial
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Inventario de la Parroquia</h1>
+                <div className="mt-3">
+  <button
+    onClick={cerrarSesion}
+    className="rounded-xl bg-white/20 px-4 py-2 text-sm hover:bg-white/30"
+  >
+    Cerrar sesión
+  </button>
+</div>
                 <div className="mt-3 h-1 w-32 rounded-full bg-white/70"></div>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
                   Inventario de la iglesia de San José y Santa Maria
@@ -689,6 +763,7 @@ Si la eliminas también se eliminarán esos objetos.
                 <tbody>
                   {inventarioFiltrado.map((item, index) => {
                     const enEdicion = editandoId === item.id;
+
 
                     return (
                       <tr key={item.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
