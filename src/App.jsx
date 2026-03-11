@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  writeBatch
+} from "firebase/firestore";
 import { db } from "./firebase";
 import { auth } from "./firebase";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
@@ -141,63 +151,95 @@ useEffect(() => {
 
   if (!usuario) return; // ⬅️ ESTA ES LA LÍNEA IMPORTANTE
 
-  const cargarDatos = async () => {
-    try {
-      const referencia = doc(db, "inventario", "InventarioParroquia");
-      const snap = await getDoc(referencia);
+const cargarDatos = async () => {
+  try {
+    setCargando(true);
 
-     if (snap.exists()) {
-  const data = snap.data();
+    console.log("1. Empieza cargarDatos");
 
-  setInventario(Array.isArray(data.items) ? data.items : datosIniciales);
-  setZonas(Array.isArray(data.zonas) ? data.zonas : []);
-  setCargando(false);
-  setTimeout(() => {
-  setVisible(true);
-}, 50);
-} else {
-        setInventario(datosIniciales);
-        setZonas([]);
+    // Cargar objetos nuevos
+    const snapshot = await getDocs(collection(db, "inventario_items"));
+    let items = snapshot.docs.map((docItem) => ({
+      id: docItem.id,
+      ...docItem.data(),
+    }));
 
-        await setDoc(referencia, {
-          items: datosIniciales,
-          zonas: [],
-        });
-      }
-    } catch (error) {
-      console.error("Error al cargar Firebase:", error);
+    console.log("2. Objetos en inventario_items:", items.length);
+
+    // Cargar zonas nuevas
+    const referenciaZonas = doc(db, "inventario_config", "zonas");
+    const snapZonas = await getDoc(referenciaZonas);
+
+    let zonasCargadas = [];
+
+    if (snapZonas.exists()) {
+      const dataZonas = snapZonas.data();
+      zonasCargadas = Array.isArray(dataZonas.lista) ? dataZonas.lista : [];
     }
-  };
+
+    console.log("3. Zonas en inventario_config:", zonasCargadas.length);
+
+    // Si todavía no hay datos en la nueva estructura, intentar migrar desde la antigua
+    if (items.length === 0 && zonasCargadas.length === 0) {
+      console.log("4. Se va a ejecutar la migración");
+
+      const referenciaAntigua = doc(db, "inventario", "InventarioParroquia");
+      const snapAntiguo = await getDoc(referenciaAntigua);
+
+      if (snapAntiguo.exists()) {
+        const dataAntigua = snapAntiguo.data();
+        const itemsAntiguos = Array.isArray(dataAntigua.items) ? dataAntigua.items : [];
+        const zonasAntiguas = Array.isArray(dataAntigua.zonas) ? dataAntigua.zonas : [];
+
+        console.log("5. Objetos antiguos encontrados:", itemsAntiguos.length);
+        console.log("6. Zonas antiguas encontradas:", zonasAntiguas.length);
+
+        for (const item of itemsAntiguos) {
+          const { id, ...resto } = item;
+          await addDoc(collection(db, "inventario_items"), resto);
+        }
+
+        console.log("7. Objetos migrados a inventario_items");
+
+        await setDoc(doc(db, "inventario_config", "zonas"), {
+          lista: zonasAntiguas,
+        });
+
+        console.log("8. Zonas migradas a inventario_config");
+
+        const snapshotMigrado = await getDocs(collection(db, "inventario_items"));
+        items = snapshotMigrado.docs.map((docItem) => ({
+          id: docItem.id,
+          ...docItem.data(),
+        }));
+
+        zonasCargadas = zonasAntiguas;
+
+        console.log("9. Objetos tras migración:", items.length);
+      }
+    }
+
+    setInventario(items);
+    setZonas(zonasCargadas);
+
+  } catch (error) {
+    console.error("Error al cargar Firebase:", error);
+    alert("Error al cargar Firebase: " + error.message);
+  } finally {
+    setCargando(false);
+
+    setTimeout(() => {
+      setVisible(true);
+    }, 50);
+  }
+};
 
   cargarDatos();
 
 }, [usuario]);
-  console.log("ANTES DEL useEffect DE GUARDADO");
-console.log("ANTES DEL useEffect DE GUARDADO");
 
-useEffect(() => {
-  console.log("ENTRANDO AL useEffect DE GUARDADO");
 
-  if (inventario.length === 0 && zonas.length === 0) return;
 
-  const guardarDatos = async () => {
-    console.log("Guardando en Firebase", inventario);
-
-    try {
-      const referencia = doc(db, "inventario", "InventarioParroquia");
-
-      await setDoc(referencia, {
-        items: inventario,
-        zonas: zonas,
-      });
-    } catch (error) {
-      console.error("Error al guardar en Firebase:", error);
-      alert("Error al guardar en Firebase: " + error.message);
-    }
-  };
-
-  guardarDatos();
-}, [inventario, zonas]);
   useEffect(() => {
     return () => {
       if (timeoutMensajeRef.current) {
@@ -260,7 +302,7 @@ useEffect(() => {
     const idActual = editandoId;
     const filaActual = inventario.find((item) => item.id === idActual);
 
-    if (filaActual && esFilaVacia(filaActual)) {
+    if (filaActual && String(idActual).startsWith("temp-") && esFilaVacia(filaActual)) {
       setInventario((prev) => prev.filter((item) => item.id !== idActual));
       mostrarMensajeTemporal('El nuevo objeto vacío se ha cancelado.', 'warning');
     }
@@ -269,99 +311,152 @@ useEffect(() => {
     setFormulario(crearFilaVacia(Date.now(), filtroUbicacion !== 'Todas' ? filtroUbicacion : ''));
   };
 
-  const guardarEdicion = () => {
-    const objetoLimpio = formulario.objeto.trim();
-    const ubicacionLimpia = formatUbicacion(formulario.ubicacion);
-    const esNuevo = inventario.some((item) => item.id === editandoId && esFilaVacia(item));
+  const guardarEdicion = async () => {
+  const objetoLimpio = formulario.objeto.trim();
+  const ubicacionLimpia = formatUbicacion(formulario.ubicacion);
+  const esNuevo = String(editandoId).startsWith("temp-");
 
-    if (!objetoLimpio || !ubicacionLimpia) {
-      mostrarMensajeTemporal('Debes indicar al menos el objeto y la ubicación.', 'warning');
-      return;
+  if (!objetoLimpio || !ubicacionLimpia) {
+    mostrarMensajeTemporal("Debes indicar al menos el objeto y la ubicación.", "warning");
+    return;
+  }
+
+  const datosObjeto = {
+    ...formulario,
+    objeto: objetoLimpio,
+    ubicacion: ubicacionLimpia,
+    cantidad: Math.max(0, Number(formulario.cantidad) || 0),
+    medida: formulario.medida.trim(),
+    descripcion: (formulario.descripcion || "").trim(),
+    foto: formulario.foto || "",
+  };
+
+  try {
+    if (esNuevo) {
+      const docRef = await addDoc(collection(db, "inventario_items"), datosObjeto);
+
+      setInventario((prev) =>
+        prev.map((item) =>
+          item.id === editandoId ? { ...datosObjeto, id: docRef.id } : item
+        )
+      );
+
+      mostrarMensajeTemporal(`Nuevo objeto ${objetoLimpio} añadido correctamente.`, "success");
+    } else {
+      await updateDoc(doc(db, "inventario_items", String(editandoId)), datosObjeto);
+
+      setInventario((prev) =>
+        prev.map((item) =>
+          item.id === editandoId ? { ...datosObjeto, id: editandoId } : item
+        )
+      );
+
+      mostrarMensajeTemporal(`${objetoLimpio} actualizado correctamente.`, "success");
     }
 
-    setInventario((prev) =>
-      prev.map((item) =>
-        item.id === editandoId
-          ? {
-              ...formulario,
-              objeto: objetoLimpio,
-              ubicacion: ubicacionLimpia,
-              cantidad: Math.max(0, Number(formulario.cantidad) || 0),
-              medida: formulario.medida.trim(),
-            }
-          : item
+    setEditandoId(null);
+    setFormulario(
+      crearFilaVacia(
+        `temp-${Date.now()}`,
+        filtroUbicacion !== "Todas" ? filtroUbicacion : ""
       )
     );
-
-    setEditandoId(null);
-    setFormulario(crearFilaVacia(Date.now(), filtroUbicacion !== 'Todas' ? filtroUbicacion : ''));
-    mostrarMensajeTemporal(
-      esNuevo ? `Nuevo objeto ${objetoLimpio} añadido correctamente.` : `${objetoLimpio} actualizado correctamente.`,
-      'success'
-    );
-  };
+  } catch (error) {
+    console.error("Error al guardar objeto:", error);
+    alert("Error al guardar objeto: " + error.message);
+  }
+};
 
   const eliminarFila = (id) => {
     setObjetoAEliminar(id);
   };
 
-  const confirmarEliminacion = () => {
-    if (objetoAEliminar === null) return;
+ const confirmarEliminacion = async () => {
+  if (objetoAEliminar === null) return;
 
-    const itemEliminado = inventario.find((item) => item.id === objetoAEliminar);
+  const itemEliminado = inventario.find((item) => item.id === objetoAEliminar);
+
+  try {
+    if (!String(objetoAEliminar).startsWith("temp-")) {
+      await deleteDoc(doc(db, "inventario_items", String(objetoAEliminar)));
+    }
 
     setInventario((prev) => prev.filter((item) => item.id !== objetoAEliminar));
+
     if (editandoId === objetoAEliminar) {
       setEditandoId(null);
-      setFormulario(crearFilaVacia(Date.now(), filtroUbicacion !== 'Todas' ? filtroUbicacion : ''));
+      setFormulario(
+        crearFilaVacia(
+          `temp-${Date.now()}`,
+          filtroUbicacion !== "Todas" ? filtroUbicacion : ""
+        )
+      );
     }
+
     setObjetoAEliminar(null);
-    mostrarMensajeTemporal(`Objeto ${itemEliminado?.objeto || ''} eliminado correctamente.`, 'success');
-  };
+    mostrarMensajeTemporal(`Objeto ${itemEliminado?.objeto || ""} eliminado correctamente.`, "success");
+  } catch (error) {
+    console.error("Error al eliminar objeto:", error);
+    alert("Error al eliminar objeto: " + error.message);
+  }
+};
 
   const cancelarEliminacion = () => {
     setObjetoAEliminar(null);
   };
 
   const agregarNuevoObjeto = () => {
-    const nuevoId = Date.now();
-    const ubicacionInicial = filtroUbicacion !== 'Todas' ? filtroUbicacion : '';
-    const nuevaFila = crearFilaVacia(nuevoId, ubicacionInicial);
+  const nuevoId = `temp-${Date.now()}`;
+  const ubicacionInicial = filtroUbicacion !== "Todas" ? filtroUbicacion : "";
+  const nuevaFila = crearFilaVacia(nuevoId, ubicacionInicial);
 
-    setInventario((prev) => [nuevaFila, ...prev]);
-    setEditandoId(nuevoId);
-    setFormulario(nuevaFila);
-  };
+  setInventario((prev) => [nuevaFila, ...prev]);
+  setEditandoId(nuevoId);
+  setFormulario(nuevaFila);
+};
 
   const actualizarCampo = (campo, valor) => {
     setFormulario((prev) => ({ ...prev, [campo]: valor }));
   };
 
-  const anadirUbicacion = () => {
-   
-    const texto = nuevaUbicacion.trim();
-    if (!texto) return;
+  const anadirUbicacion = async () => {
+  const texto = nuevaUbicacion.trim();
+  if (!texto) return;
 
-    const ubicacionBonita = formatUbicacion(texto);
+  const ubicacionBonita = formatUbicacion(texto);
 
-    setZonas((prev) => {
-      const existe = prev.some((z) => normalizeUbicacion(z) === normalizeUbicacion(ubicacionBonita));
-      if (existe) return prev;
-      return [...prev, ubicacionBonita];
+  const existe = zonas.some(
+    (z) => normalizeUbicacion(z) === normalizeUbicacion(ubicacionBonita)
+  );
+
+  if (existe) {
+    mostrarMensajeTemporal(`La zona ${ubicacionBonita} ya existe.`, "warning");
+    return;
+  }
+
+  const nuevasZonas = [...zonas, ubicacionBonita];
+
+  try {
+    await setDoc(doc(db, "inventario_config", "zonas"), {
+      lista: nuevasZonas,
     });
 
+    setZonas(nuevasZonas);
     setFiltroUbicacion(ubicacionBonita);
-    setNuevaUbicacion('');
+    setNuevaUbicacion("");
 
     if (editandoId !== null) {
       setFormulario((prev) => ({ ...prev, ubicacion: ubicacionBonita }));
     }
 
-    mostrarMensajeTemporal(`Ubicación ${ubicacionBonita} preparada para usar.`, 'success');
-  };
+    mostrarMensajeTemporal(`Ubicación ${ubicacionBonita} preparada para usar.`, "success");
+  } catch (error) {
+    console.error("Error al guardar zonas:", error);
+    alert("Error al guardar zonas: " + error.message);
+  }
+};
 
-  const eliminarZona = (zona) => {
-
+const eliminarZona = async (zona) => {
   const zonaNormalizada = normalizeUbicacion(zona);
 
   const objetosEnZona = inventario.filter(
@@ -381,18 +476,37 @@ Si la eliminas también se eliminarán esos objetos.
   }
 
   const confirmar = window.confirm(mensaje);
-
   if (!confirmar) return;
 
-  setZonas((prev) =>
-    prev.filter((z) => normalizeUbicacion(z) !== zonaNormalizada)
-  );
+  try {
+    const batch = writeBatch(db);
 
-  setInventario((prev) =>
-    prev.filter((item) => normalizeUbicacion(item.ubicacion) !== zonaNormalizada)
-  );
+    objetosEnZona.forEach((item) => {
+      if (!String(item.id).startsWith("temp-")) {
+        batch.delete(doc(db, "inventario_items", String(item.id)));
+      }
+    });
 
-  mostrarMensajeTemporal(`Zona "${zona}" eliminada correctamente.`, "success");
+    const nuevasZonas = zonas.filter(
+      (z) => normalizeUbicacion(z) !== zonaNormalizada
+    );
+
+    batch.set(doc(db, "inventario_config", "zonas"), {
+      lista: nuevasZonas,
+    });
+
+    await batch.commit();
+
+    setZonas(nuevasZonas);
+    setInventario((prev) =>
+      prev.filter((item) => normalizeUbicacion(item.ubicacion) !== zonaNormalizada)
+    );
+
+    mostrarMensajeTemporal(`Zona "${zona}" eliminada correctamente.`, "success");
+  } catch (error) {
+    console.error("Error al eliminar zona:", error);
+    alert("Error al eliminar zona: " + error.message);
+  }
 };
 
   const obtenerClaseUbicacion = (ubicacion = '') => {
@@ -916,15 +1030,30 @@ if (authCargando || cargando || loginCargando) {
           accept="image/*"
           className="hidden"
          onChange={(e) => {
-
   const archivo = e.target.files[0];
   if (!archivo) return;
 
   const reader = new FileReader();
 
-  reader.onloadend = () => {
-    const base64 = reader.result;
-    actualizarCampo("foto", base64);
+  reader.onload = (evento) => {
+    const img = new Image();
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const maxWidth = 800;
+      const escala = img.width > maxWidth ? maxWidth / img.width : 1;
+
+      canvas.width = img.width * escala;
+      canvas.height = img.height * escala;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const base64Optimizado = canvas.toDataURL("image/jpeg", 0.7);
+      actualizarCampo("foto", base64Optimizado);
+    };
+
+    img.src = evento.target.result;
   };
 
   reader.readAsDataURL(archivo);
