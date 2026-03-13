@@ -937,7 +937,7 @@ if (authCargando || cargando || loginCargando) {
 
 
                     return (
-                      <tr key={item.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                      <tr key={item.id + "-" + index} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="border-b border-slate-200 p-3 align-middle">
                           {enEdicion ? (
                             <input
