@@ -209,8 +209,9 @@ const cargarDatos = async () => {
 
         const snapshotMigrado = await getDocs(collection(db, "inventario_items"));
         items = snapshotMigrado.docs.map((docItem) => ({
-          id: docItem.id,
           ...docItem.data(),
+          id: docItem.id,
+          
         }));
 
         zonasCargadas = zonasAntiguas;
@@ -371,30 +372,82 @@ const cargarDatos = async () => {
     setObjetoAEliminar(id);
   };
 
- const confirmarEliminacion = async () => {
+const confirmarEliminacion = async () => {
   if (objetoAEliminar === null) return;
 
   const itemEliminado = inventario.find((item) => item.id === objetoAEliminar);
 
   try {
+    let borradoEnFirebase = false;
+
+    // 1. Intentar borrar directamente por ID del documento
     if (!String(objetoAEliminar).startsWith("temp-")) {
-      await deleteDoc(doc(db, "inventario_items", String(objetoAEliminar)));
+      const refDirecta = doc(db, "inventario_items", String(objetoAEliminar));
+      const snapDirecta = await getDoc(refDirecta);
+
+      if (snapDirecta.exists()) {
+        await deleteDoc(refDirecta);
+        borradoEnFirebase = true;
+      }
     }
 
-    setInventario((prev) => prev.filter((item) => item.id !== objetoAEliminar));
+    // 2. Si no se ha borrado, buscar manualmente el documento correcto
+    if (!borradoEnFirebase && itemEliminado) {
+      const snapshot = await getDocs(collection(db, "inventario_items"));
+
+      const candidato = snapshot.docs.find((docItem) => {
+        const data = docItem.data();
+
+        return (
+          String(data.id) === String(objetoAEliminar) ||
+          (
+            data.objeto === itemEliminado.objeto &&
+            normalizeUbicacion(data.ubicacion || "") === normalizeUbicacion(itemEliminado.ubicacion || "") &&
+            Number(data.cantidad) === Number(itemEliminado.cantidad) &&
+            String(data.medida || "") === String(itemEliminado.medida || "") &&
+            String(data.descripcion || "") === String(itemEliminado.descripcion || "")
+          )
+        );
+      });
+
+      if (candidato) {
+        await deleteDoc(doc(db, "inventario_items", candidato.id));
+        borradoEnFirebase = true;
+      }
+    }
+
+    // 3. Recargar desde Firebase para asegurar que lo que ves es lo real
+    const snapshotActualizado = await getDocs(collection(db, "inventario_items"));
+    const itemsActualizados = snapshotActualizado.docs.map((docItem) => ({
+      ...docItem.data(),
+      id: docItem.id,
+    }));
+
+    setInventario(itemsActualizados);
 
     if (editandoId === objetoAEliminar) {
       setEditandoId(null);
       setFormulario(
         crearFilaVacia(
-                  `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           filtroUbicacion !== "Todas" ? filtroUbicacion : ""
         )
       );
     }
 
     setObjetoAEliminar(null);
-    mostrarMensajeTemporal(`Objeto ${itemEliminado?.objeto || ""} eliminado correctamente.`, "success");
+
+    if (borradoEnFirebase) {
+      mostrarMensajeTemporal(
+        `Objeto ${itemEliminado?.objeto || ""} eliminado correctamente.`,
+        "success"
+      );
+    } else {
+      mostrarMensajeTemporal(
+        "No se encontró el documento exacto en Firebase, pero la lista se ha recargado.",
+        "warning"
+      );
+    }
   } catch (error) {
     console.error("Error al eliminar objeto:", error);
     alert("Error al eliminar objeto: " + error.message);
@@ -553,8 +606,8 @@ Si la eliminas también se eliminarán esos objetos.
   try {
     const snapshot = await getDocs(collection(db, "inventario_items"));
     const items = snapshot.docs.map((docItem) => ({
-      id: docItem.id,
       ...docItem.data(),
+      id: docItem.id
     }));
 
     const snapZonas = await getDoc(doc(db, "inventario_config", "zonas"));
