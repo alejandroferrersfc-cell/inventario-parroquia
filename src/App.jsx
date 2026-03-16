@@ -357,7 +357,7 @@ const cargarDatos = async () => {
     setEditandoId(null);
     setFormulario(
       crearFilaVacia(
-        `temp-${Date.now()}`,
+        `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         filtroUbicacion !== "Todas" ? filtroUbicacion : ""
       )
     );
@@ -387,7 +387,7 @@ const cargarDatos = async () => {
       setEditandoId(null);
       setFormulario(
         crearFilaVacia(
-          `temp-${Date.now()}`,
+                  `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           filtroUbicacion !== "Todas" ? filtroUbicacion : ""
         )
       );
@@ -406,7 +406,7 @@ const cargarDatos = async () => {
   };
 
   const agregarNuevoObjeto = () => {
-  const nuevoId = `temp-${Date.now()}`;
+  const nuevoId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ubicacionInicial = filtroUbicacion !== "Todas" ? filtroUbicacion : "";
   const nuevaFila = crearFilaVacia(nuevoId, ubicacionInicial);
 
@@ -548,6 +548,43 @@ Si la eliminas también se eliminarán esos objetos.
       timeoutMensajeRef.current = null;
     }, 3000);
   };
+
+  const exportarBackupJSON = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, "inventario_items"));
+    const items = snapshot.docs.map((docItem) => ({
+      id: docItem.id,
+      ...docItem.data(),
+    }));
+
+    const snapZonas = await getDoc(doc(db, "inventario_config", "zonas"));
+    const zonasData = snapZonas.exists() ? snapZonas.data() : { lista: [] };
+
+    const backup = {
+      fecha: new Date().toISOString(),
+      items,
+      zonas: Array.isArray(zonasData.lista) ? zonasData.lista : [],
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: "application/json;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = `backup-inventario-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    URL.revokeObjectURL(url);
+
+    mostrarMensajeTemporal("Backup JSON descargado correctamente.", "success");
+  } catch (error) {
+    console.error("Error al exportar backup JSON:", error);
+    alert("Error al exportar backup JSON: " + error.message);
+  }
+};
 
   const exportarCSV = () => {
     try {
@@ -898,6 +935,14 @@ if (authCargando || cargando || loginCargando) {
                     <Plus className="h-4 w-4" />
                     Añadir objeto
                   </button>
+
+                  <button
+  onClick={exportarBackupJSON}
+  className="flex items-center justify-center gap-2 rounded-2xl bg-slate-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-600"
+>
+  <Download className="h-4 w-4" />
+  Backup JSON
+</button>
 
                   <button
                     onClick={exportarCSV}
